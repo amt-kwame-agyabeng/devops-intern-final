@@ -1,153 +1,90 @@
-# Loki Monitoring Setup
+# Grafana Loki Monitoring Setup
 
-## Overview
+Date: August 11, 2026
 
-Loki was configured locally using Docker, with Grafana Alloy used to collect Docker container logs and forward them to Loki.
+1. Create Docker network
 
-## 1. Create the Docker Network
+The monitoring containers were placed on a dedicated Docker network:
 
-A dedicated Docker network was created for Loki and Alloy:
-
-```bash
 docker network create monitoring
-```
 
-## 2. Start Loki
+2. Start Loki
 
 Loki was started using the official Grafana Loki Docker image:
 
-```bash
-MSYS_NO_PATHCONV=1 docker run -d \
-  --name loki \
-  --network monitoring \
-  -p 3100:3100 \
-  grafana/loki:latest \
-  -config.file=/etc/loki/local-config.yaml
-```
+docker run -d 
+--name loki 
+--network monitoring 
+-p 3100:3100 
+grafana/loki:latest
 
-`MSYS_NO_PATHCONV=1` was required because Git Bash on Windows was converting the Linux configuration path into a Windows path.
+3. Verify Loki
 
-Loki was verified using:
+Check that the Loki container is running:
 
-```bash
+docker ps
+
+Check the Loki readiness endpoint:
+
 curl http://localhost:3100/ready
-```
 
-Expected output:
+Expected response:
 
-```text
 ready
-```
 
-## 3. Configure Log Forwarding
+4. Log forwarding
 
-Grafana Alloy was used as the log collector.
+Grafana Alloy was used to collect Docker container logs and forward them to Loki.
 
-The Alloy configuration is stored in:
+Alloy was configured to discover Docker container log files and send them to the local Loki instance.
 
-```text
-monitoring/alloy-config.alloy
-```
-
-Alloy monitors Docker container JSON log files located under:
-
-```text
-/var/lib/docker/containers/
-```
-
-and forwards the logs to:
-
-```text
-http://loki:3100/loki/api/v1/push
-```
-
-Alloy was started with:
-
-```bash
-MSYS_NO_PATHCONV=1 docker run -d \
-  --name alloy \
-  --network monitoring \
-  -v /var/lib/docker/containers:/var/lib/docker/containers:ro \
-  -v "$(pwd)/monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro" \
-  grafana/alloy:latest \
-  run /etc/alloy/config.alloy
-```
-
-## 4. Verify Alloy
-
-Alloy was checked using:
-
-```bash
-docker logs alloy
-```
-
-The logs confirmed that Alloy started successfully and began tailing Docker container log files.
+Alloy logs confirmed that Docker log files were being discovered and tailed.
 
 Example:
 
-```text
-Alloy is running
 start tailing file
-```
+component_id=loki.source.file.docker_logs
 
-## 5. Verify Loki Labels
+5. View Loki labels
 
-Loki's labels were queried using:
+The following command can be used to confirm that Loki is receiving log metadata:
 
-```bash
 curl "http://localhost:3100/loki/api/v1/labels"
-```
 
-The response confirmed that Loki was receiving log metadata:
+Example response:
 
-```json
-{
-  "status": "success",
-  "data": [
-    "filename",
-    "job",
-    "service_name"
-  ]
-}
-```
+{"status":"success","data":["filename","job","service_name"]}
 
-## 6. View Logs
+6. Useful commands
 
-Docker container logs can be viewed locally with:
+Check Loki:
 
-```bash
-docker logs <container-name>
-```
+docker ps
 
-For example:
+View Loki logs:
 
-```bash
+docker logs loki
+
+Check Loki readiness:
+
+curl http://localhost:3100/ready
+
+View Alloy logs:
+
 docker logs alloy
-```
 
-Loki's HTTP API can also be queried to retrieve log streams.
+Check available Loki labels:
 
-To query logs from Loki:
+curl "http://localhost:3100/loki/api/v1/labels"
 
-```bash
-curl "http://localhost:3100/loki/api/v1/query_range?query={job=\"docker\"}"
-```
+7. Result
 
-## 7. Components
+Loki was successfully started locally using Docker.
 
-The monitoring setup consists of:
+Grafana Alloy was configured to collect Docker container logs and forward them to Loki.
 
-```text
-Docker Containers
-       |
-       v
-Docker JSON Logs
-       |
-       v
-Grafana Alloy
-       |
-       v
-Loki :3100
-```
+The Loki readiness endpoint returned:
 
-This provides a simple local log collection and centralized log storage setup suitable for development and testing.
+ready
+
+This confirms that Loki was running and ready to receive log data.
