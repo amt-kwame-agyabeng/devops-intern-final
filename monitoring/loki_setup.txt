@@ -1,0 +1,153 @@
+# Loki Monitoring Setup
+
+## Overview
+
+Loki was configured locally using Docker, with Grafana Alloy used to collect Docker container logs and forward them to Loki.
+
+## 1. Create the Docker Network
+
+A dedicated Docker network was created for Loki and Alloy:
+
+```bash
+docker network create monitoring
+```
+
+## 2. Start Loki
+
+Loki was started using the official Grafana Loki Docker image:
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d \
+  --name loki \
+  --network monitoring \
+  -p 3100:3100 \
+  grafana/loki:latest \
+  -config.file=/etc/loki/local-config.yaml
+```
+
+`MSYS_NO_PATHCONV=1` was required because Git Bash on Windows was converting the Linux configuration path into a Windows path.
+
+Loki was verified using:
+
+```bash
+curl http://localhost:3100/ready
+```
+
+Expected output:
+
+```text
+ready
+```
+
+## 3. Configure Log Forwarding
+
+Grafana Alloy was used as the log collector.
+
+The Alloy configuration is stored in:
+
+```text
+monitoring/alloy-config.alloy
+```
+
+Alloy monitors Docker container JSON log files located under:
+
+```text
+/var/lib/docker/containers/
+```
+
+and forwards the logs to:
+
+```text
+http://loki:3100/loki/api/v1/push
+```
+
+Alloy was started with:
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d \
+  --name alloy \
+  --network monitoring \
+  -v /var/lib/docker/containers:/var/lib/docker/containers:ro \
+  -v "$(pwd)/monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro" \
+  grafana/alloy:latest \
+  run /etc/alloy/config.alloy
+```
+
+## 4. Verify Alloy
+
+Alloy was checked using:
+
+```bash
+docker logs alloy
+```
+
+The logs confirmed that Alloy started successfully and began tailing Docker container log files.
+
+Example:
+
+```text
+Alloy is running
+start tailing file
+```
+
+## 5. Verify Loki Labels
+
+Loki's labels were queried using:
+
+```bash
+curl "http://localhost:3100/loki/api/v1/labels"
+```
+
+The response confirmed that Loki was receiving log metadata:
+
+```json
+{
+  "status": "success",
+  "data": [
+    "filename",
+    "job",
+    "service_name"
+  ]
+}
+```
+
+## 6. View Logs
+
+Docker container logs can be viewed locally with:
+
+```bash
+docker logs <container-name>
+```
+
+For example:
+
+```bash
+docker logs alloy
+```
+
+Loki's HTTP API can also be queried to retrieve log streams.
+
+To query logs from Loki:
+
+```bash
+curl "http://localhost:3100/loki/api/v1/query_range?query={job=\"docker\"}"
+```
+
+## 7. Components
+
+The monitoring setup consists of:
+
+```text
+Docker Containers
+       |
+       v
+Docker JSON Logs
+       |
+       v
+Grafana Alloy
+       |
+       v
+Loki :3100
+```
+
+This provides a simple local log collection and centralized log storage setup suitable for development and testing.
