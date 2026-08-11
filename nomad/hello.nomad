@@ -1,0 +1,26 @@
+job "hello-devops" {
+
+  datacenters = ["dc1"]
+
+  type = "batch"
+
+  group "hello" {
+
+    count = 1
+
+    task "hello" {
+
+      driver = "docker"
+
+      config {
+        image      = "devkwame/devops-hello:latest"
+        force_pull = true
+      }
+
+      resources {
+        cpu    = 100
+        memory = 128
+      }
+    }
+  }
+}
